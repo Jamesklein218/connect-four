@@ -6,6 +6,7 @@
 	
 	# <Utility String>: String component for UI/UX 
 	WELCOME: 		.asciiz "Welcome to FOUR IN A ROW!!\nAssignment of Tran Ngoc Dang Khoa\nRepository: github.com/Jamesklein218/four-in-a-row (Private)\n\n_________________________________________________\n| The rule is simple:                           |\n|                                               |\n| 1. Each player (X or O) will take turn        |\n|    dropping the coint down                    |\n| 2. Whoever gets 4 Xs or Os first will win     |\n| 3. Each player will have 3 times to undo      |\n|    your move. Fail to do so will result in a  |\n|    loss.                                      |\n| 4. Each player will have 3 times to violate   |\n|    the input. Fail to do so will result in a  |\n|    loss.                                      |\n-------------------------------------------------\n"
+	DEBUG:			.asciiz "\nDEBUG\n"
 	ENDL: 			.asciiz	"\n"
 	SPACE: 			.asciiz " "
 	TAB: 			.asciiz "\t"
@@ -42,7 +43,7 @@
 			      		      
 	game_history: 	.space 168	# 42 slots storing maximum of 42 steps (1 for player 1 and 2 for player 2)
 	
-	session_count:	.word 3		# Number of rounds (from 1 to maximum capcity (42) )
+	session_count:	.word 1		# Number of rounds (from 1 to maximum capcity (42) )
 	
 	Player1: 	.space 20	# Name of the Player1
 	Player2: 	.space 20	# Name of the Player2	
@@ -196,10 +197,6 @@
 		
 		jal 	get_random_player	# Randomly choose 1 or 2 to $v0
 		
-		la 	$a0, current_player
-		sw 	$v0, 0($a0)		# Store to current_player
-		move 	$t0, $v0
-		
 		la 	$a0, ASK_NAME_PLAYER1
 		li 	$v0, 4
 		syscall				# Print String
@@ -300,10 +297,13 @@
 		 
 		while_invalid_input:
 			beq 	$s0, 2, P2_input_turn
+			
+			# Printing the message asking the user to input
 			# Player's 1 turn
 			la 	$a0, Player1
 			li 	$v0, 4		# Print String status code
-			syscall 
+			syscall
+			j exit_turn
 			P2_input_turn:
 			# Player's 2 turn
 			la 	$a0, Player2
@@ -327,8 +327,20 @@
 			beq	$t1, 1, while_invalid_input
 			slti 	$t1, $t0, 8			# If the input is more than 8, try again
 			bne 	$t1, 1, while_invalid_input
-			# TODO: Check game_board[input].size() >= 6
+			# TODO: Check len_list[input] >= 6
 			# TODO: Add violations count when violate
+		
+		move 	$a0, $t0
+		move 	$a1, $s0		
+		jal 	insert_column		# Function call to insert to the matrix
+		
+		jal 	check_win		# Function call to check win or not, return value will be in $v0
+		move 	$t1, $v0
+		
+		# Change the status if one player won
+		beq	$t1, 0, not_win
+		sw	$s0, status
+		not_win:
 		
 		beq 	$s0, 2, P2_change
 		# Player's 1 turn
@@ -346,8 +358,76 @@
 		addi 	$sp, $sp, 8
 		jr 	$ra
 	
+	# insert_column (void)
+	# Parameter Register: 	$a0: column, $a1: player
+	# Return Register: 	None
+	# Function: 		Insert the coin to the right position, increase len_list[$a0]
+	# Algorithm:		
+	insert_column:
+		subi 	$sp, $sp, 4
+		sw 	$ra, 0($sp)
+		
+		# Main insert algorithm
+		addi 	$t0, $0, 1		# row = 0
+		move 	$t1, $a0		# column = 0
+		subi 	$t1, $t1, 1
+		move 	$t3, $a1		# player 1 or player 2
+		
+		probing_loop:
+			beq 	$t0, 6, exit_probing
+			
+			move	$a1, $t0
+			move	$a2, $t1
+			jal	get_address	# Function call get the address of [a1][a2]
+			lw 	$t2, 0($a0)
+			
+			bne	$t2, 0, exit_probing
+			
+			addi 	$t0, $t0, 1
+			j probing_loop
+			
+		exit_probing:
+		subi	$t0, $t0, 1
+		move	$a1, $t0
+		move	$a2, $t1
+		jal	get_address	# Function call get the address of [a1][a2]
+		
+		# Save the position
+		add 	$t2, $zero, $t3 
+		sw 	$t2, 0($a0)
+		
+		# Append len_list
+		la 	$t0, len_list
+		addi 	$t2, $t1, 0
+		sll	$t2, $t2, 2
+		add 	$t0, $t0, $t2
+		lw 	$t2, 0($t0)
+		add	$t2, $t2, $t3
+		sw	$t2, 0($t0)
+		
+		addi 	$t1, $t1, 1
+		move 	$a0, $t1
+		
+		lw 	$ra, 0($sp)
+		addi 	$sp, $sp, 4
+		jr 	$ra
+		
+	# check_win (bool)
+	# Parameter Register: 	$a0, $a1
+	# Return Register: 	$v0
+	# Function: 		Check if the player has win or not and return 0 for false and 1 for true
+	# Algorithm:		
+	check_win:
+		subi 	$sp, $sp, 4
+		sw 	$ra, 0($sp)
+		
+		addi 	$v0, $0, 0
+		
+		lw 	$ra, 0($sp)
+		addi 	$sp, $sp, 4
+		jr 	$ra
 	
-	# Utility
+	# UTILITY
 	
 	# get_random_player (int)
 	# Parameter Register: 	None
@@ -395,8 +475,10 @@
 		jal display_start		# Display the start screen
 		
 		session_loop:
-			lw 	$t0, status
+			lw 	$t0, status			# Check status if not 0 then exit
 			bne 	$t0, 0, exit_session_loop
+			lw 	$t0, session_count		# Check session_count if number of moves exceed 42
+			beq 	$t0, 43, exit_session_loop
 			
 			jal 	display_session
 			
