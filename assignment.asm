@@ -12,23 +12,24 @@
 	
 	ASK_NAME_PLAYER1:	.asciiz "Enter Player 1's name (below 20 letters):\t"
 	ASK_NAME_PLAYER2: 	.asciiz "Enter Player 2's name (below 20 letters):\t"
-	X: 			.asciiz "X"
-	O:			.asciiz "O"
+	ASK_SYMBOL:		.asciiz "You will play first! Please choose your symbol (0 for 'X' or else for 'O'):\t"
+	
+	P1_symbol: 		.asciiz "X"
+	P2_symbol:		.asciiz "O"
 	BOARD_NUMBERING: 	.asciiz "\t\t   1     2     3     4     5     6     7\n"
-	#BOARD_HORIZONTAL:	.asciiz "\t\t-------------------------------------------\n"
 	BOARD_HORIZONTAL:	.asciiz "\t\t___________________________________________\n"
 	BOARD_EMPTY_1: 		.asciiz "\t\t|     |     |     |     |     |     |     |\n"
 	BOARD_EMPTY_2: 		.asciiz "|  "
 	BOARD_EMPTY_3:		.asciiz "|\n"
 	BOARD_EMPTY_4: 		.asciiz "\t\t|_____|_____|_____|_____|_____|_____|_____|\n"
-	
+		
 	
 	# DATA STORAGE: Use to store allocated, memory 
 	game_board: 	.word 0, 0, 0, 0, 0, 0, 0,  	# 42 slots * 4 bytes for integer = 168 bytes
-			      0, 0, 2, 0, 0, 0, 0,	# Here we use the column major strategy, with the below formulae:
-			      0, 0, 0, 0, 0, 1, 0,	# Address = baseAddress + (columnIndex * rowSize + rowIndex) * datasize
+			      0, 0, 0, 0, 0, 0, 0,	# Here we use the column major strategy, with the below formulae:
+			      0, 0, 0, 0, 0, 0, 0,	# Address = baseAddress + (columnIndex * rowSize + rowIndex) * datasize
 			      0, 0, 0, 0, 0, 0, 0,
-			      0, 0, 0, 0, 0, 0, 0,
+			      0, 0, 1, 2, 0, 0, 0,
 			      0, 0, 0, 0, 0, 0, 0
 			      
 	game_history: 	.space 168	# 42 slots storing maximum of 42 steps (1 for player 1 and 2 for player 2)
@@ -44,7 +45,8 @@
 	P2_violation:	.word 3		# Player2's violation count
 		
 	# FLAGS: Checker flags for the game
-	status: 	.word 0		# 0 for undone, 1 for Player1 won, 2 for Player2 won 
+	status: 	.word 0		# 0 for undone, 1 for Player1 won, 2 for Player2 won
+	current_player:	.word 1		# 1 for Player 1 and 2 for Player 2
 	
 .text
 	j main
@@ -89,7 +91,6 @@
 	# Parameter Register: 	None
 	# Return Register: 	None
 	# Function: 		Print out the game board using 2 while loop
-	
 	print_board:
 		subi $sp, $sp, 4
 		sw $ra, 0($sp)
@@ -137,11 +138,11 @@
 				syscall
 				j exit_branch
 				if_player1_move:
-					la $a0, X
+					la $a0, P1_symbol
 					syscall
 					j exit_branch
 				if_player2_move:
-					la $a0, O
+					la $a0, P2_symbol
 					syscall
 				exit_branch:
 					
@@ -166,6 +167,8 @@
 			j I_loop
 		exit_I_loop:
 		
+		
+		
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
@@ -183,10 +186,22 @@
 		subi $sp, $sp, 4
 		sw $ra, 0($sp)
 		
+		jal get_random_player		# Randomly choose 1 or 2 to $v0
+		
+		la $a0, current_player
+		sw $v0, 0($a0)			# Store to current_player
+		move $t0, $v0
+		
 		la $a0, ASK_NAME_PLAYER1
+		li $v0, 4
 		syscall				# Print String
 		
-		la $a0, Player1			# String buffer
+		beq $t0, 1, P1_start
+		la $a0, Player2			# String buffer
+		j exit_start_1
+		P1_start:
+			la $a0, Player1		# String buffer
+		exit_start_1:
 		li $a1, 20			# Maximum character to read
 		li $v0, 8			# Read String status code
 		syscall				# Read String to Player1
@@ -198,10 +213,43 @@
 		la $a0, ASK_NAME_PLAYER2
 		syscall 			# Print String			
 		
-		la $a0, Player2			# String buffer
+		beq $t0, 1, P1_start_2
+		la $a0, Player1			# String buffer
+		j exit_start_2
+		P1_start_2:
+			la $a0, Player2		# String buffer
+		exit_start_2:
 		li $a1, 20			# Maximum character to read
 		li $v0, 8			# Read String status code
 		syscall 			# Read String to Player2
+		
+		la $a0, ENDL
+		li $v0, 4
+		syscall
+		
+		la $a0, Player1
+		li $v0, 4
+		syscall
+		
+		la $a0, ASK_SYMBOL
+		syscall
+		
+		li $v0, 5			# Read integer
+		syscall
+		
+	
+		beq $v0, 0, p1_is_X
+			# Swap character
+			lb $t0, P1_symbol
+			lb $t1, P2_symbol
+			sb $t0, P2_symbol
+			sb $t1, P1_symbol
+		j p1_is_X
+		p1_is_X:
+		
+		la $a0, ENDL
+		li $v0, 4
+		syscall
 		
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
@@ -253,10 +301,8 @@
 		addi $sp, $sp, 8
 		jr $ra
 	main:
-		jal display_start
+		jal display_start		# Display the start screen
 		
-		jal get_random_player
-
 		session_loop:
 			jal display_session
 		exit_session_loop:
