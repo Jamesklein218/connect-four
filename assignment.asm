@@ -97,7 +97,14 @@
 		addi 	$sp, $sp, 4
 		jr 	$ra
 	display_end:
-	
+		subi 	$sp, $sp, 4
+		sw 	$ra, 0($sp)
+		
+		jal 	print_board
+		
+		lw 	$ra, 0($sp)
+		addi 	$sp, $sp, 4
+		jr 	$ra
 	# print_board (void)
 	# Parameter Register: 	None
 	# Return Register: 	None
@@ -330,10 +337,13 @@
 			# TODO: Check len_list[input] >= 6
 			# TODO: Add violations count when violate
 		
-		move 	$a0, $t0
-		move 	$a1, $s0		
-		jal 	insert_column		# Function call to insert to the matrix
-		
+		move 	$a0, $t0		# Parameter: column + 1
+		move 	$a1, $s0		# Parameter: player[1, 2]
+		subi 	$a0, $a0, 1		# column -= 1
+		jal 	insert_column		# Function call to insert to the matrix, return $a1: row, $a2: column
+						# for the next function
+	
+		move 	$a0, $s0		# Parameter: player[1, 2]
 		jal 	check_win		# Function call to check win or not, return value will be in $v0
 		move 	$t1, $v0
 		
@@ -358,9 +368,9 @@
 		addi 	$sp, $sp, 8
 		jr 	$ra
 	
-	# insert_column (void)
+	# insert_column (coordinate)
 	# Parameter Register: 	$a0: column, $a1: player
-	# Return Register: 	None
+	# Return Register: 	$a1: row, $a2: column
 	# Function: 		Insert the coin to the right position, increase len_list[$a0]
 	# Algorithm:		
 	insert_column:
@@ -370,7 +380,6 @@
 		# Main insert algorithm
 		addi 	$t0, $0, 1		# row = 0
 		move 	$t1, $a0		# column = 0
-		subi 	$t1, $t1, 1
 		move 	$t3, $a1		# player 1 or player 2
 		
 		probing_loop:
@@ -388,8 +397,8 @@
 			
 		exit_probing:
 		subi	$t0, $t0, 1
-		move	$a1, $t0
-		move	$a2, $t1
+		move	$a1, $t0	# row
+		move	$a2, $t1	# column
 		jal	get_address	# Function call get the address of [a1][a2]
 		
 		# Save the position
@@ -413,15 +422,86 @@
 		jr 	$ra
 		
 	# check_win (bool)
-	# Parameter Register: 	$a0, $a1
+	# Parameter Register: 	$a0: holding value, $a1: row, $a2: column
 	# Return Register: 	$v0
-	# Function: 		Check if the player has win or not and return 0 for false and 1 for true
-	# Algorithm:		
+	# Function: 		Check if the player has win or not and return 0 for false and 1 for true:		
 	check_win:
 		subi 	$sp, $sp, 4
 		sw 	$ra, 0($sp)
 		
-		addi 	$v0, $0, 0
+		move	$t1, $a1		# row
+		move 	$t2, $a2		# column
+		move	$t3, $a0		# holding value
+		
+		# VERTICAL
+		# Algorithm
+		addi 	$t0, $0, 0		# Count var
+		vertical_down_check:
+			beq	$a1, 6, exit_vert_down_check 	# if i == 6 break
+			beq 	$a2, 7, exit_vert_down_check	# if j == 7 break
+			
+			jal 	get_address
+			lw	$a0, 0($a0)
+			bne 	$a0, $t3, exit_vert_down_check
+			
+			addi 	$t0, $t0, 1
+			addi 	$a1, $a1, 1
+			j 	vertical_down_check
+		exit_vert_down_check:
+		
+		slti	$t0, $t0, 4
+		beq 	$t0, 1, not_vert
+		add 	$v0, $0, 1
+		j 	check_return
+		not_vert:
+		
+		move 	$a1, $t1
+		move 	$a2, $t2
+		
+		# HORIZONTAL
+		# Algorithm
+		addi 	$t0, $0, 0		# Count var
+		addi 	$a1, $a1, 1
+		addi 	$a2, $a2, 1
+		horizontal_right_check:
+			beq	$a1, 6, exit_hori_right_check 	# if i == 6 break
+			beq 	$a2, 7, exit_hori_right_check	# if j == 7 break
+			
+			jal 	get_address
+			lw	$a0, 0($a0)
+			bne 	$a0, $t3, exit_hori_right_check
+			
+			addi 	$t0, $t0, 1
+			addi 	$a2, $a2, 1
+			j 	horizontal_right_check
+		exit_hori_right_check:
+		
+		move 	$a1, $t1
+		move 	$a2, $t2
+		horizontal_left_check:
+			beq	$a1, -1, exit_hori_left_check 	# if i == 6 break
+			beq 	$a2, -1, exit_hori_left_check	# if j == 7 break
+			
+			jal 	get_address
+			lw	$a0, 0($a0)
+			bne 	$a0, $t3, exit_hori_left_check
+			
+			addi 	$t0, $t0, 1
+			subi 	$a2, $a2, 1
+			j 	horizontal_left_check
+		exit_hori_left_check:
+		
+		slti	$t0, $t0, 4
+		beq 	$t0, 1, not_hori
+		add 	$v0, $0, 1
+		j 	check_return
+		not_hori:
+		
+		add 	$v0, $0, 0
+		
+		check_return:
+		move	$a1, $t1
+		move	$a2, $t2
 		
 		lw 	$ra, 0($sp)
 		addi 	$sp, $sp, 4
@@ -485,7 +565,7 @@
 			j 	session_loop
 		exit_session_loop:
 		
-		# jal display_end
+		jal display_end
 		
 		# Close the program
 		li $v0, 10
