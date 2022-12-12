@@ -10,11 +10,13 @@
 	ENDL: 			.asciiz	"\n"
 	SPACE: 			.asciiz " "
 	TAB: 			.asciiz "\t"
+	QUESTION:		.asciiz "?"
 	
 	ASK_NAME_PLAYER1:	.asciiz "Enter Player 1's name (below 20 letters):\t"
 	ASK_NAME_PLAYER2: 	.asciiz "Enter Player 2's name (below 20 letters):\t"
 	ASK_SYMBOL:		.asciiz ", you will play first! Please choose your symbol (choose 0 for 'X', other number for 'O'):\t"
 	ASK_POSITION:		.asciiz " please enter your position:\t"
+	ASK_UNDO:		.asciiz "Are you sure you want to drop at column "
 	
 	P1_symbol: 		.asciiz "X"
 	P2_symbol:		.asciiz "O"
@@ -24,10 +26,15 @@
 	BOARD_EMPTY_2: 		.asciiz "|  "
 	BOARD_EMPTY_3:		.asciiz "|\n"
 	BOARD_EMPTY_4: 		.asciiz "\t\t|_____|_____|_____|_____|_____|_____|_____|\n"
+	SEPERATION:		.asciiz "\n__________________________________________________________________________________\n\n"
+	
+	CONGRATULATION:		.asciiz "\t\t           YOU HAVE WON, "
+
 	
 	BEGIN:			.asciiz "LET'S GET STARTED !!"
-	ERROR: 			.asciiz "[!!!]"
-	INVALID_INPUT_MSG:	.asciiz "PLEASE TYPE THE CORRECT ANSWER"
+	ERROR: 			.asciiz "[ERROR] "
+	INVALID_INPUT_MSG:	.asciiz ", INVALID INPUT!!! You have "
+	INVALID_INPUT_MSG_2:	.asciiz " chances left."
 		
 	
 	# DATA STORAGE: Use to store allocated, memory 
@@ -70,7 +77,6 @@
 		subi 	$sp, $sp, 4
 		sw 	$ra, 0($sp)
 	
-		# WELCOME
 		la 	$a0, WELCOME
 		li 	$v0, 4			# Print String status code
 		syscall 			# Print String
@@ -100,7 +106,36 @@
 		subi 	$sp, $sp, 4
 		sw 	$ra, 0($sp)
 		
+		la 	$a0, SEPERATION
+		li 	$v0, 4			# Print String status code
+		syscall 
+		
 		jal 	print_board
+		
+		la 	$a0, ENDL
+		li 	$v0, 4
+		syscall 
+		
+		la 	$a0, CONGRATULATION
+		li 	$v0, 4			# Print String status code
+		syscall 
+						
+		lw 	$t1, current_player		# Hold the value of current_player
+		beq	$t1, 1, P2_won
+		la 	$a0, Player1
+		li 	$v0, 4
+		syscall
+		j exit_won
+		P2_won:
+		la 	$a0, Player2
+		li 	$v0, 4
+		syscall
+		exit_won:
+		
+		
+		la 	$a0, SEPERATION
+		li 	$v0, 4			# Print String status code
+		syscall 
 		
 		lw 	$ra, 0($sp)
 		addi 	$sp, $sp, 4
@@ -299,24 +334,151 @@
 		
 		lw 	$s0, current_player		# Hold the value of current_player
 		
+		beq 	$s0, 2, P2_input_turn
+		
+		# Printing the message asking the user to input
+		# Player's 1 turn
+		la 	$a0, Player1
+		li 	$v0, 4			# Print String status code
+		syscall
+		j exit_turn
+		P2_input_turn:
+		# Player's 2 turn
+		la 	$a0, Player2
+		li 	$v0, 4			# Print String status code
+		syscall 
+		exit_turn:
+		
+		la 	$a0, ASK_POSITION
+		li 	$v0, 4			# Print String status code
+		syscall
+		
+		li 	$v0, 5			# Read integer to $v0
+		syscall
+		move 	$t0, $v0		# input
+		
 		# Here we read the position until the position is correct, or the player's 
 		# violation count is 0
-		 
 		while_invalid_input:
-			beq 	$s0, 2, P2_input_turn
+			# Check violation
+			# Here we need to check these conditions:
+			# 	- If 0 < input < 8
+			#	- If game_board[input].size() < 6
+			# 	- If check len_list[input] >= 6
+			condition1:
+			slti	$t1, $t0, 1			# If the input is less than 1, try again
+			bne	$t1, 1, condition2
+			j 	continue_invalid_input
+			condition2:
+			slti 	$t1, $t0, 8			# If the input is more than 8, try again
+			beq 	$t1, 1, condition3
+			j 	continue_invalid_input
+			condition3:				# Check len_list[input] >= 6
+			la 	$t1, len_list
+			add 	$t1, $t1, $t0
+			add 	$t1, $t1, $t0
+			add 	$t1, $t1, $t0
+			add 	$t1, $t1, $t0
+			subi 	$t1, $t1, 4
+			lw 	$t2, 0($t1)
+			bne 	$t2, 6, exit_invalid_input
+			
+			continue_invalid_input:
+			
+			# PRINT ERROR
+			la 	$a0, ENDL
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			la 	$a0, ERROR
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			
 			
 			# Printing the message asking the user to input
+			beq 	$s0, 2, P2_error_input_noti
 			# Player's 1 turn
 			la 	$a0, Player1
-			li 	$v0, 4		# Print String status code
+			li 	$v0, 4			# Print String status code
 			syscall
-			j exit_turn
-			P2_input_turn:
+			
+			la 	$a0, INVALID_INPUT_MSG
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			lw	$t1, P1_violation
+			subi	$t1, $t1, 1
+			sw	$t1, P1_violation
+			
+			move	$a0, $t1
+			li	$v0, 1
+			syscall
+			
+			la 	$a0, INVALID_INPUT_MSG_2
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			la 	$a0, ENDL
+			li 	$v0, 4			# Print String status code
+			syscall
+			syscall
+			
+			bne	$t1, 0, P2_not_won
+			addi 	$t1, $0, 2
+			sw	$t1, status
+			j 	exit_change
+			P2_not_won:
+			
+			j exit_error_input_noti
+			P2_error_input_noti:
 			# Player's 2 turn
 			la 	$a0, Player2
 			li 	$v0, 4			# Print String status code
 			syscall 
-			exit_turn:
+			la 	$a0, INVALID_INPUT_MSG
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			lw	$t1, P2_violation
+			subi	$t1, $t1, 1
+			sw	$t1, P2_violation
+			
+			move	$a0, $t1
+			li	$v0, 1
+			syscall
+			
+			la 	$a0, INVALID_INPUT_MSG_2
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			la 	$a0, ENDL
+			li 	$v0, 4			# Print String status code
+			syscall
+			syscall
+			
+			bne	$t1, 0, P1_not_won
+			addi 	$t1, $0, 1
+			sw	$t1, status
+			j 	exit_change
+			P1_not_won:
+			
+			exit_error_input_noti:
+		
+			beq 	$s0, 2, P2_input_turn_invalid_input
+			
+			# Printing the message asking the user to input
+			# Player's 1 turn
+			la 	$a0, Player1
+			li 	$v0, 4			# Print String status code
+			syscall
+			j exit_turn_invalid_input
+			P2_input_turn_invalid_input:
+			# Player's 2 turn
+			la 	$a0, Player2
+			li 	$v0, 4			# Print String status code
+			syscall 
+			exit_turn_invalid_input:
 			
 			la 	$a0, ASK_POSITION
 			li 	$v0, 4			# Print String status code
@@ -325,17 +487,8 @@
 			li 	$v0, 5			# Read integer to $v0
 			syscall
 			move 	$t0, $v0		# input
-			
-			# Check violation
-			# Here we need to check these conditions:
-			# 	- If 0 < input < 8
-			#	- If game_board[input].size() < 6
-			slti	$t1, $t0, 1			# If the input is less than 1, try again
-			beq	$t1, 1, while_invalid_input
-			slti 	$t1, $t0, 8			# If the input is more than 8, try again
-			bne 	$t1, 1, while_invalid_input
-			# TODO: Check len_list[input] >= 6
-			# TODO: Add violations count when violate
+			j while_invalid_input
+		exit_invalid_input:
 		
 		move 	$a0, $t0		# Parameter: column + 1
 		move 	$a1, $s0		# Parameter: player[1, 2]
@@ -411,7 +564,7 @@
 		sll	$t2, $t2, 2
 		add 	$t0, $t0, $t2
 		lw 	$t2, 0($t0)
-		add	$t2, $t2, $t3
+		addi	$t2, $t2, 1
 		sw	$t2, 0($t0)
 		
 		addi 	$t1, $t1, 1
@@ -461,7 +614,7 @@
 		# HORIZONTAL
 		# Algorithm
 		addi 	$t0, $0, 0		# Count var
-		addi 	$a1, $a1, 1
+		
 		addi 	$a2, $a2, 1
 		horizontal_right_check:
 			beq	$a1, 6, exit_hori_right_check 	# if i == 6 break
@@ -496,6 +649,99 @@
 		add 	$v0, $0, 1
 		j 	check_return
 		not_hori:
+			
+		move 	$a1, $t1
+		move 	$a2, $t2
+		
+		# MAIN DIAGONAl
+		# Algorithm 
+		addi 	$t0, $0, 0		# Count var
+		
+		addi 	$a1, $a1, 1
+		addi 	$a2, $a2, 1
+		main_diagonal_up_check:
+			beq	$a1, 6, exit_main_diagonal_up_check 	# if i == 6 break
+			beq 	$a2, 7, exit_main_diagonal_up_check	# if j == 7 break
+			
+			jal 	get_address
+			lw	$a0, 0($a0)
+			bne 	$a0, $t3, exit_main_diagonal_up_check
+			
+			addi 	$t0, $t0, 1
+			addi 	$a1, $a1, 1
+			addi 	$a2, $a2, 1
+			j 	main_diagonal_up_check
+		exit_main_diagonal_up_check:
+		
+		move 	$a1, $t1
+		move 	$a2, $t2
+		main_diagonal_down_check:
+			beq	$a1, -1, exit_main_diagonal_down_check 	# if i == 6 break
+			beq 	$a2, -1, exit_main_diagonal_down_check	# if j == 7 break
+			
+			jal 	get_address
+			lw	$a0, 0($a0)
+			bne 	$a0, $t3, exit_main_diagonal_down_check
+			
+			addi 	$t0, $t0, 1
+			subi 	$a1, $a1, 1
+			subi 	$a2, $a2, 1
+			j 	main_diagonal_down_check
+		exit_main_diagonal_down_check:
+		
+		slti	$t0, $t0, 4
+		beq 	$t0, 1, not_main_diagonal
+		add 	$v0, $0, 1
+		j 	check_return
+		not_main_diagonal:
+		
+		move 	$a1, $t1
+		move 	$a2, $t2
+		
+		# SUB DIAGONAl
+		# Algorithm 
+		addi 	$t0, $0, 0		# Count var
+		
+		addi 	$a1, $a1, 1
+		subi 	$a2, $a2, 1
+		sub_diagonal_up_check:
+			beq	$a1, 6, exit_sub_diagonal_up_check 	# if i == 6 break
+			beq 	$a2, -1, exit_sub_diagonal_up_check	# if j == 7 break
+			
+			jal 	get_address
+			lw	$a0, 0($a0)
+			bne 	$a0, $t3, exit_sub_diagonal_up_check
+			
+			addi 	$t0, $t0, 1
+			addi 	$a1, $a1, 1
+			subi 	$a2, $a2, 1
+			j 	sub_diagonal_up_check
+		exit_sub_diagonal_up_check:
+		
+		move 	$a1, $t1
+		move 	$a2, $t2
+		sub_diagonal_down_check:
+			beq	$a1, -1, exit_sub_diagonal_down_check 	# if i == 6 break
+			beq 	$a2, 7, exit_sub_diagonal_down_check	# if j == 7 break
+			
+			jal 	get_address
+			lw	$a0, 0($a0)
+			bne 	$a0, $t3, exit_sub_diagonal_down_check
+			
+			addi 	$t0, $t0, 1
+			subi 	$a1, $a1, 1
+			addi 	$a2, $a2, 1
+			j 	sub_diagonal_down_check
+		exit_sub_diagonal_down_check:
+		
+		slti	$t0, $t0, 4
+		beq 	$t0, 1, not_sub_diagonal
+		add 	$v0, $0, 1
+		j 	check_return
+		not_sub_diagonal:
+		
+		move 	$a1, $t1
+		move 	$a2, $t2
 		
 		add 	$v0, $0, 0
 		
