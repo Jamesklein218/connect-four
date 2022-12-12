@@ -5,7 +5,7 @@
 	COLUMN_SIZE:	.word 7
 	
 	# <Utility String>: String component for UI/UX 
-	WELCOME: 		.asciiz "Welcome to FOUR IN A ROW!!\nAssignment of Tran Ngoc Dang Khoa\nRepository: github.com/Jamesklein218/four-in-a-row (Private)\n\n_________________________________________________\n| The rule is simple:                           |\n|                                               |\n| 1. Each player (X or O) will take turn        |\n|    dropping the coint down                    |\n| 2. Whoever gets 4 Xs or Os first will win     |\n| 3. Each player will have 3 times to undo      |\n|    your move. Fail to do so will result in a  |\n|    loss.                                      |\n| 4. Each player will have 3 times to violate   |\n|    the input. Fail to do so will result in a  |\n|    loss.                                      |\n-------------------------------------------------\n"
+	WELCOME: 		.asciiz "\t\t\tWelcome to FOUR IN A ROW!!\n\t\tAssignment of Tran Ngoc Dang Khoa\n\tRepository: github.com/Jamesklein218/four-in-a-row (Private)\n\n\t\t_________________________________________________\n\t\t| The rule is simple:                           |\n\t\t|                                               |\n\t\t| 1. Each player (X or O) will take turn        |\n\t\t|    dropping the coint down                    |\n\t\t| 2. Whoever gets 4 Xs or Os first will win     |\n\t\t| 3. Each player will have 3 times to undo      |\n\t\t|    your move. Fail to do so will result in a  |\n\t\t|    loss.                                      |\n\t\t| 4. Each player will have 3 times to violate   |\n\t\t|    the input. Fail to do so will result in a  |\n\t\t|    loss.                                      |\n\t\t-------------------------------------------------\n"
 	DEBUG:			.asciiz "\nDEBUG\n"
 	ENDL: 			.asciiz	"\n"
 	SPACE: 			.asciiz " "
@@ -14,10 +14,10 @@
 	
 	ASK_NAME_PLAYER1:	.asciiz "Enter Player 1's name (below 20 letters):\t"
 	ASK_NAME_PLAYER2: 	.asciiz "Enter Player 2's name (below 20 letters):\t"
-	ASK_SYMBOL:		.asciiz ", you will play first! Please choose your symbol (choose 0 for 'X', other number for 'O'):\t"
-	ASK_POSITION:		.asciiz " please enter your position:\t"
+	ASK_SYMBOL:		.asciiz ", you will play first! Please choose your symbol ('X' for X, press other key for O):\t"
+	ASK_POSITION:		.asciiz ", which column do you want to go? (1-7)\t"
 	ASK_UNDO_1:		.asciiz "You have "
-	ASK_UNDO_2:		.asciiz " undos left. Do you want to undo? (Y for Yes, press any other key for No)"
+	ASK_UNDO_2:		.asciiz " undos left. Do you want to undo? (Y for Yes, press any other key for No)\t"
 	
 	P1_symbol: 		.asciiz "X"
 	P2_symbol:		.asciiz "O"
@@ -91,7 +91,10 @@
 		lw 	$ra, 0($sp)
 		addi 	$sp, $sp, 4
 		jr 	$ra
-	
+	# display_session (void)
+	# Parameter Register: 	None
+	# Return Register: 	None
+	# Function: 		Display the sesison of the game, including: game board and questions
 	display_session:
 		subi 	$sp, $sp, 4
 		sw 	$ra, 0($sp)
@@ -107,6 +110,11 @@
 		lw 	$ra, 0($sp)
 		addi 	$sp, $sp, 4
 		jr 	$ra
+		
+	# display_session (void)
+	# Parameter Register: 	None
+	# Return Register: 	None
+	# Function: 		Display victory pose, win, lose or draw
 	display_end:
 		subi 	$sp, $sp, 4
 		sw 	$ra, 0($sp)
@@ -320,10 +328,10 @@
 		la	$a0, ASK_SYMBOL
 		syscall
 		
-		li 	$v0, 5			# Read integer
+		li 	$v0, 12			# Read character
 		syscall
 	
-		beq	$v0, 0, p1_is_X
+		beq	$v0, 'X', p1_is_X
 			# Swap character
 			lb $t0, P1_symbol
 			lb $t1, P2_symbol
@@ -505,6 +513,7 @@
 			li 	$v0, 5			# Read integer to $v0
 			syscall
 			move 	$t0, $v0		# input
+			
 			j while_invalid_input
 		exit_invalid_input:
 		
@@ -521,18 +530,114 @@
 		# Change the status if one player won
 		beq	$t1, 0, not_win
 		sw	$s0, status
+		j no_undo
 		not_win:
 		
-		beq 	$s0, 2, P2_change
-		# Player's 1 turn
-		addi 	$s0, $0, 2		# Set current_player from 2 to 1
-		sw 	$s0, current_player 
-		j 	exit_change
-		P2_change:
-		# Player's 2 turn
-		addi 	$s0, $0, 1		# Set current_player from 2 to 1
-		sw 	$s0, current_player
-		exit_change:
+		# Check if both players has moved
+		lw	$t1, session_count
+		slti	$t1, $t1, 3
+		beq	$t1, 1, no_undo
+		
+		# Ask the player whether they want to undo
+		beq 	$s0, 2, P2_undo
+			lw 	$t1, P1_undo_count
+			
+			beq	$t1, 0, no_undo
+			
+			la 	$a0, ASK_UNDO_1
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			move 	$a0, $t1
+			li 	$v0, 1
+			syscall
+			
+			la 	$a0, ASK_UNDO_2
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			li	$v0, 12			# Read character
+			syscall
+			
+			bne	$v0, 'Y', no_undo	# If user don't want to undo, continue
+			
+			# UNDO
+			subi 	$t1, $t1, 1
+			sw	$t1, P1_undo_count
+			
+			la	$t3, game_history
+			sll	$a2, $a2, 2
+			add 	$t3, $t3, $a2
+			srl	$a2, $a2, 2
+			lw	$t2, 0($t3)
+			
+			# Delete from gameboard
+			
+			sw 	$zero, 0($t2)
+			
+			lw 	$t1, session_count
+			subi 	$t1, $t1, 1
+			sw	$t1, session_count
+			j 	exit_change
+			
+			
+		P2_undo:
+			lw 	$t1, P2_undo_count
+			
+			beq	$t1, 0, no_undo
+			
+			la 	$a0, ASK_UNDO_1
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			move 	$a0, $t1
+			li 	$v0, 1
+			syscall
+			
+			la 	$a0, ASK_UNDO_2
+			li 	$v0, 4			# Print String status code
+			syscall
+			
+			li	$v0, 12			# Read character
+			syscall
+			
+			bne	$v0, 'Y', no_undo	# If user don't want to undo, continue
+			
+			
+			subi 	$t1, $t1, 1
+			sw	$t1, P2_undo_count
+			
+			la	$t3, game_history
+			sll	$a2, $a2, 2
+			add 	$t3, $t3, $a2
+			srl	$a2, $a2, 2
+			lw	$t2, 0($t3)
+			
+			# Delete from gameboard
+			
+			sw 	$zero, 0($t2)
+			
+			lw 	$t1, session_count
+			subi 	$t1, $t1, 1
+			sw	$t1, session_count
+			j	exit_change
+		no_undo:
+			
+			beq 	$s0, 2, P2_change
+			# Player's 1 turn
+			addi 	$s0, $0, 2		# Set current_player from 2 to 1
+			sw 	$s0, current_player 
+			j 	exit_change
+			P2_change:
+			# Player's 2 turn
+			addi 	$s0, $0, 1		# Set current_player from 2 to 1
+			sw 	$s0, current_player
+			exit_change:
+			
+		la 	$a0, ENDL
+		li 	$v0, 4			# Print String status code
+		syscall
+		
 		
 		lw 	$ra, 0($sp)
 		lw	$s0, 4($sp)
@@ -570,11 +675,18 @@
 		subi	$t0, $t0, 1
 		move	$a1, $t0	# row
 		move	$a2, $t1	# column
-		jal	get_address	# Function call get the address of [a1][a2]
+		jal	get_address	# Function call get the address of [a1][a2] and return to $a0
 		
 		# Save the position
 		add 	$t2, $zero, $t3 
 		sw 	$t2, 0($a0)
+		
+		# Add the address to game_history
+		la	$t3, game_history
+		sll	$t1, $t1, 2
+		add 	$t3, $t3, $t1
+		srl	$t1, $t1, 2
+		sw 	$a0, 0($t3)
 		
 		# Append len_list
 		la 	$t0, len_list
