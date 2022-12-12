@@ -927,7 +927,7 @@
 		lw 	$s0, 4($sp)
 		addi 	$sp, $sp, 8
 		jr 	$ra
-	main:	
+	main:
 		jal display_start		# Display the start screen
 		
 		session_loop:
