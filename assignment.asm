@@ -16,7 +16,8 @@
 	ASK_NAME_PLAYER2: 	.asciiz "Enter Player 2's name (below 20 letters):\t"
 	ASK_SYMBOL:		.asciiz ", you will play first! Please choose your symbol (choose 0 for 'X', other number for 'O'):\t"
 	ASK_POSITION:		.asciiz " please enter your position:\t"
-	ASK_UNDO:		.asciiz "Are you sure you want to drop at column "
+	ASK_UNDO_1:		.asciiz "You have "
+	ASK_UNDO_2:		.asciiz " undos left. Do you want to undo? (Y for Yes, press any other key for No)"
 	
 	P1_symbol: 		.asciiz "X"
 	P2_symbol:		.asciiz "O"
@@ -29,7 +30,7 @@
 	SEPERATION:		.asciiz "\n__________________________________________________________________________________\n\n"
 	
 	CONGRATULATION:		.asciiz "\t\t           YOU HAVE WON, "
-
+	GAME_DRAW:		.asciiz "\t\t                  GAME DRAW !!! "
 	
 	BEGIN:			.asciiz "LET'S GET STARTED !!"
 	ERROR: 			.asciiz "[ERROR] "
@@ -99,6 +100,10 @@
 		
 		jal 	handle_input_logic
 		
+		lw 	$t1, session_count
+		addi 	$t1, $t1, 1
+		sw	$t1, session_count
+		
 		lw 	$ra, 0($sp)
 		addi 	$sp, $sp, 4
 		jr 	$ra
@@ -116,20 +121,33 @@
 		li 	$v0, 4
 		syscall 
 		
-		la 	$a0, CONGRATULATION
-		li 	$v0, 4			# Print String status code
-		syscall 
-						
+		lw 	$t1, status		# Hold the value of current_player
+		beq	$t1, 0, Draw
 		lw 	$t1, current_player		# Hold the value of current_player
 		beq	$t1, 1, P2_won
-		la 	$a0, Player1
-		li 	$v0, 4
-		syscall
-		j exit_won
+			la 	$a0, CONGRATULATION
+			li 	$v0, 4			# Print String status code
+			syscall 
+		
+			la 	$a0, Player1
+			li 	$v0, 4
+			syscall
+			j exit_won
 		P2_won:
-		la 	$a0, Player2
-		li 	$v0, 4
-		syscall
+		
+			la 	$a0, CONGRATULATION
+			li 	$v0, 4			# Print String status code
+			syscall 
+			
+			la 	$a0, Player2
+			li 	$v0, 4
+			syscall
+			j exit_won
+		Draw:
+			la 	$a0, GAME_DRAW
+			li 	$v0, 4			# Print String status code
+			syscall 
+		
 		exit_won:
 		
 		
