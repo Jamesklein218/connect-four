@@ -1,2 +1,2 @@
 # CONNECT FOUR
-## Author Tran Ngoc Dang Khoa
+A Computer Architecture Assignment
